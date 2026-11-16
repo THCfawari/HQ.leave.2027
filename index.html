@@ -1,0 +1,1923 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2027 Annual Leave Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .custom-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .sticky-emp-col {
+            position: sticky;
+            left: 0;
+            z-index: 20;
+            width: 310px;
+            min-width: 310px;
+            max-width: 310px;
+            background-color: #ffffff;
+            box-shadow: 4px 0 10px -4px rgba(15, 23, 42, 0.08);
+        }
+
+        /* Red & White diagonal hatched shading exclusively for Global Block Periods */
+        .blocked-day-shaded {
+            background-color: #ffffff;
+            background-image: repeating-linear-gradient(
+                -45deg,
+                #fee2e2,
+                #fee2e2 6px,
+                #ffffff 6px,
+                #ffffff 12px
+            );
+        }
+        .blocked-header-shaded {
+            background-color: #fff1f2;
+            background-image: repeating-linear-gradient(
+                -45deg,
+                #fecdd3,
+                #fecdd3 6px,
+                #fff1f2 6px,
+                #fff1f2 12px
+            );
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background-color: #ffffff !important; }
+        }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none px-4 sm:px-0"></div>
+
+    <!-- Top Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+        <div class="max-w-[1600px] mx-auto px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+            <!-- Brand Title & Live Sync Status -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h1 class="text-base sm:text-lg font-extrabold text-slate-900">2027 Annual Leave Planner</h1>
+
+                        <!-- Live Cloud Status Badge -->
+                        <span id="cloudStatusBadge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <span id="cloudStatusDot" class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                            <span id="cloudStatusText">Connecting to Cloud...</span>
+                        </span>
+
+                        <!-- Active Unlocked Employee Session Indicator (Visible ONLY when an employee unlocks their row) -->
+                        <span id="empSessionBadge" class="hidden items-center gap-2 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200">
+                            <span id="empSessionLabel">Unlocked: Employee 1</span>
+                            <button type="button" data-action="lock-emp-session" class="px-1.5 py-0.5 rounded bg-sky-600 hover:bg-sky-700 text-white text-[10px] font-extrabold transition">
+                                Lock Session
+                            </button>
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5">Quota: 22 Working Days | Max 2 Periods/Year, Min 10 Consecutive Working Days Each (Excl. Fri &amp; Sat)</p>
+                </div>
+            </div>
+
+            <!-- Right Header Controls -->
+            <div class="flex items-center gap-2 flex-wrap no-print">
+                <!-- Admin Header Controls (Strictly Hidden in Employee Mode) -->
+                <div id="adminHeaderControls" class="hidden items-center gap-1.5 flex-wrap">
+                    <button type="button" data-action="add-employee" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition">
+                        <span>+ Add Employee</span>
+                    </button>
+                    <button type="button" data-action="open-range-modal" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition">
+                        <span>Global Block / Range</span>
+                    </button>
+                    <button type="button" data-action="toggle-global-lock" id="lockAllBtn" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition">
+                        Lock All
+                    </button>
+                    <button type="button" data-action="export-csv" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition">
+                        Export CSV
+                    </button>
+                    <button type="button" data-action="open-change-admin-pass" class="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+                        Change Admin PIN
+                    </button>
+                    <button type="button" data-action="open-reset-modal" class="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 transition">
+                        Reset Data
+                    </button>
+                </div>
+
+                <!-- Admin Login / Exit Admin Toggle Button -->
+                <button type="button" data-action="toggle-admin" id="adminToggleBtn" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white shadow-xs transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <span id="adminToggleBtnText">Admin Login</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="max-w-[1600px] w-full mx-auto px-2 sm:px-6 py-4 space-y-3.5 flex-1">
+
+        <!-- Admin Brush Toolbar (Strictly Hidden in Employee Mode) -->
+        <section id="adminBrushToolbar" class="hidden bg-white rounded-2xl p-3.5 border border-slate-200 shadow-xs space-y-2.5 no-print">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-extrabold text-slate-800 mr-1">Admin Brush Tool:</span>
+
+                    <button type="button" data-action="set-brush" data-brush="leave" id="brushBtn_leave"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition bg-sky-600 text-white border-sky-600 shadow-xs">
+                        <span class="w-4 h-4 rounded bg-white text-sky-600 flex items-center justify-center text-[11px] font-black">✓</span>
+                        <span>Grant / Edit Leave (✓)</span>
+                    </button>
+
+                    <button type="button" data-action="set-brush" data-brush="block" id="brushBtn_block"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition bg-white text-rose-800 border-rose-200 hover:bg-rose-50">
+                        <span class="w-4 h-4 rounded blocked-day-shaded border border-rose-400 inline-block"></span>
+                        <span>Global Block / Exempt</span>
+                    </button>
+                </div>
+
+                <div class="text-[11px] font-medium text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                    <strong>Admin Override:</strong> Granting leave on a blocked date automatically exempts that employee cleanly (✓).
+                </div>
+            </div>
+        </section>
+
+        <!-- 12-Month Navigation Tabs -->
+        <section class="bg-white rounded-2xl p-2.5 border border-slate-200 shadow-xs flex items-center justify-between gap-2 no-print">
+            <button type="button" data-action="prev-month" class="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition shrink-0">
+                ← Prev
+            </button>
+            <div id="monthTabsContainer" class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar py-1 px-1 flex-1 justify-start sm:justify-center"></div>
+            <button type="button" data-action="next-month" class="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition shrink-0">
+                Next →
+            </button>
+        </section>
+
+        <!-- Conflict Alerts Banner (Shown only when >2 staff overlap on a date) -->
+        <section id="conflictBanner" class="hidden bg-rose-50 border border-rose-300 rounded-2xl px-4 py-3 shadow-xs flex items-start justify-between gap-3 no-print">
+            <div class="flex items-start gap-2.5 text-rose-950 text-xs leading-relaxed">
+                <span class="w-6 h-6 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 font-black mt-0.5">!</span>
+                <div>
+                    <div class="font-extrabold text-rose-900">Conflict Alerts (&gt;2 Staff Booked on Same Date):</div>
+                    <div id="conflictBannerText" class="mt-0.5 font-medium text-rose-800"></div>
+                </div>
+            </div>
+            <button type="button" data-action="dismiss-conflict-banner" class="px-2.5 py-1 rounded-lg bg-rose-200/80 hover:bg-rose-200 text-rose-950 text-xs font-bold shrink-0">Hide</button>
+        </section>
+
+        <!-- Monthly Interactive Calendar Grid -->
+        <section class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div id="scheduleTableWrapper" class="overflow-x-auto custom-scrollbar"></div>
+        </section>
+
+        <!-- Booking Priority Order Log (Strictly Hidden in Employee Mode) -->
+        <section id="priorityPanelSection" class="hidden bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                <div>
+                    <h3 class="text-sm font-extrabold text-slate-900">
+                        Booking Priority Order — <span id="priorityMonthLabel" class="text-sky-600">January 2027</span>
+                    </h3>
+                    <p class="text-[11px] text-slate-500">Employees are ranked chronologically by exact booking timestamp; 3rd+ concurrent staff on the same date are marked with ★</p>
+                </div>
+                <span id="priorityCountPill" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">0 Employees</span>
+            </div>
+            <div id="priorityLogGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5"></div>
+        </section>
+
+    </main>
+
+    <!-- ========================================================= -->
+    <!-- Modals -->
+    <!-- ========================================================= -->
+
+    <!-- 1. Admin Login Modal -->
+    <div id="adminPassModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Admin Login</h3>
+                <button type="button" data-action="close-modal" data-modal="adminPassModal" class="px-2 py-1 rounded-lg hover:bg-slate-100 text-slate-500 font-bold text-xs">✕</button>
+            </div>
+            <form id="adminPassForm" class="space-y-3">
+                <p class="text-xs text-slate-600 leading-relaxed">Enter your Admin PIN to access supervisor controls (default PIN is <code class="px-1.5 py-0.5 rounded bg-slate-100 font-bold">1234</code>).</p>
+                <input type="password" id="adminPassInput" required minlength="3" placeholder="Enter Admin PIN" autocomplete="off"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-center text-lg font-extrabold tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-slate-800">
+                <p id="adminPassError" class="hidden text-xs font-bold text-rose-600 text-center"></p>
+                <div class="flex items-center justify-end gap-2 pt-1">
+                    <button type="button" data-action="close-modal" data-modal="adminPassModal" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. Change Admin PIN Modal -->
+    <div id="changeAdminPassModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Change Admin PIN</h3>
+                <button type="button" data-action="close-modal" data-modal="changeAdminPassModal" class="px-2 py-1 rounded-lg hover:bg-slate-100 text-slate-500 font-bold text-xs">✕</button>
+            </div>
+            <form id="changeAdminPassForm" class="space-y-3">
+                <input type="password" id="newAdminPassInput" required minlength="4" placeholder="New Admin PIN (min 4 chars)"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-center text-lg font-extrabold tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-sky-600">
+                <div class="flex items-center justify-end gap-2 pt-1">
+                    <button type="button" data-action="close-modal" data-modal="changeAdminPassModal" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white">Save PIN</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 3. Self-Service Create Your 4-Digit PIN Modal (First-Time Employee Setup) -->
+    <div id="empCreatePinModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Create Your 4-Digit PIN</h3>
+                <button type="button" data-action="close-modal" data-modal="empCreatePinModal" class="px-2 py-1 rounded-lg hover:bg-slate-100 text-slate-500 font-bold text-xs">✕</button>
+            </div>
+            <form id="empCreatePinForm" class="space-y-3">
+                <input type="hidden" id="createPinEmpId">
+                <p id="empCreatePinDesc" class="text-xs text-slate-600 leading-relaxed"></p>
+                <div class="space-y-2.5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 mb-1">New 4-Digit PIN</label>
+                        <input type="password" id="createPinInput1" required maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="••••" autocomplete="off"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-center text-xl font-black tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-sky-600">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 mb-1">Confirm 4-Digit PIN</label>
+                        <input type="password" id="createPinInput2" required maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="••••" autocomplete="off"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-center text-xl font-black tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-sky-600">
+                    </div>
+                </div>
+                <p id="empCreatePinError" class="hidden text-xs font-bold text-rose-600 text-center"></p>
+                <div class="flex items-center justify-end gap-2 pt-1">
+                    <button type="button" data-action="close-modal" data-modal="empCreatePinModal" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white">Save PIN &amp; Unlock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 4. Enter Your 4-Digit PIN Modal (Subsequent Employee Verification) -->
+    <div id="empVerifyPinModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Enter Your 4-Digit PIN</h3>
+                <button type="button" data-action="close-modal" data-modal="empVerifyPinModal" class="px-2 py-1 rounded-lg hover:bg-slate-100 text-slate-500 font-bold text-xs">✕</button>
+            </div>
+            <form id="empVerifyPinForm" class="space-y-3">
+                <input type="hidden" id="verifyPinEmpId">
+                <p id="empVerifyPinDesc" class="text-xs text-slate-600 leading-relaxed"></p>
+                <input type="password" id="verifyPinInput" required maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="••••" autocomplete="off"
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-center text-xl font-black tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-sky-600">
+                <p id="empVerifyPinError" class="hidden text-xs font-bold text-rose-600 text-center"></p>
+                <div class="flex items-center justify-end gap-2 pt-1">
+                    <button type="button" data-action="close-modal" data-modal="empVerifyPinModal" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white">Unlock Row</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 5. Admin Manage Employee PIN Modal -->
+    <div id="adminManagePinModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Manage Employee PIN</h3>
+                <button type="button" data-action="close-modal" data-modal="adminManagePinModal" class="px-2 py-1 rounded-lg hover:bg-slate-100 text-slate-500 font-bold text-xs">✕</button>
+            </div>
+            <form id="adminManagePinForm" class="space-y-3">
+                <input type="hidden" id="adminManagePinEmpId">
+                <p id="adminManagePinEmpLabel" class="text-xs font-bold text-slate-800"></p>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Set Custom 4-Digit PIN (Numbers Only)</label>
+                    <input type="text" id="adminManagePinInput" maxlength="4" pattern="\d{4}" inputmode="numeric" placeholder="e.g. 1234"
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-center text-lg font-black tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-sky-600">
+                </div>
+                <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" data-action="reset-emp-pin-unset" class="px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200">
+                        Reset PIN (Unset)
+                    </button>
+                    <div class="flex items-center gap-2">
+                        <button type="button" data-action="close-modal" data-modal="adminManagePinModal" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">Cancel</button>
+                        <button type="submit" class="px-4 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white">Save PIN</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 6. Admin Approved & Locked Alert Modal -->
+    <div id="lockedAlertModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-200 space-y-4">
+            <div class="flex items-center gap-2.5 text-amber-700">
+                <span class="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-base">🔒</span>
+                <h3 class="text-base font-extrabold text-slate-900">Leave Schedule Locked</h3>
+            </div>
+            <p id="lockedAlertDesc" class="text-xs text-slate-600 leading-relaxed"></p>
+            <div class="flex justify-end">
+                <button type="button" data-action="close-modal" data-modal="lockedAlertModal" class="px-5 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. Admin Edit Employee Name Modal -->
+    <div id="editEmpModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Edit Employee Name</h3>
+                <button type="button" data-action="close-modal" data-modal="editEmpModal" class="px-2 py-1 rounded-lg hover:bg-slate-100 text-slate-500 font-bold text-xs">✕</button>
+            </div>
+            <form id="editEmpForm" class="space-y-3">
+                <input type="hidden" id="editEmpId">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Employee Name</label>
+                    <input type="text" id="editEmpNameInput" required placeholder="Enter employee full name..."
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-sky-600">
+                </div>
+                <div class="flex items-center justify-between pt-2">
+                    <button type="button" id="deleteEmpModalBtn" data-action="delete-emp-from-modal" class="px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200">
+                        Delete Row
+                    </button>
+                    <div class="flex items-center gap-2">
+                        <button type="button" data-action="close-modal" data-modal="editEmpModal" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">Cancel</button>
+                        <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white">Save</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 8. Global Block / Range Modal -->
+    <div id="rangeModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Global Block / Date Range</h3>
+                <button type="button" data-action="close-modal" data-modal="rangeModal" class="px-2 py-1 rounded-lg hover:bg-slate-100 text-slate-500 font-bold text-xs">✕</button>
+            </div>
+            <form id="rangeForm" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">1. Action Type</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="rangeActionType" value="set_block" checked class="peer hidden">
+                            <div class="p-2.5 rounded-xl border border-slate-200 peer-checked:border-rose-600 peer-checked:bg-rose-50 text-center font-bold text-rose-900">Set Global Block</div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="rangeActionType" value="exempt_block" class="peer hidden">
+                            <div class="p-2.5 rounded-xl border border-slate-200 peer-checked:border-emerald-600 peer-checked:bg-emerald-50 text-center font-bold text-emerald-900">Exempt / Clear Block</div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="rangeActionType" value="grant_leave" class="peer hidden">
+                            <div class="p-2.5 rounded-xl border border-slate-200 peer-checked:border-sky-600 peer-checked:bg-sky-50 text-center font-bold text-sky-900">Grant Leave (✓)</div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="rangeActionType" value="clear_leave" class="peer hidden">
+                            <div class="p-2.5 rounded-xl border border-slate-200 peer-checked:border-slate-700 peer-checked:bg-slate-100 text-center font-bold text-slate-800">Clear Leave</div>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">2. Target Employee</label>
+                    <select id="rangeEmpSelect" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 font-semibold text-slate-800"></select>
+                </div>
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Start Date</label>
+                        <input type="date" id="rangeStartDate" required min="2027-01-01" max="2027-12-31" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">End Date</label>
+                        <input type="date" id="rangeEndDate" required min="2027-01-01" max="2027-12-31" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold">
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" data-action="close-modal" data-modal="rangeModal" class="px-4 py-2 rounded-xl font-bold bg-slate-100 text-slate-700">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-sky-600 hover:bg-sky-700 text-white">Apply Range</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 9. Reset Data Confirmation Modal -->
+    <div id="resetModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl border border-slate-200 space-y-4">
+            <h3 class="text-base font-extrabold text-rose-600">Reset Schedule Data</h3>
+            <p class="text-xs text-slate-600 leading-relaxed">Select how you would like to reset the schedule (syncs immediately across all connected devices):</p>
+            <div class="flex flex-wrap items-center justify-end gap-2 pt-1">
+                <button type="button" data-action="close-modal" data-modal="resetModal" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">Cancel</button>
+                <button type="button" data-action="execute-reset" data-mode="leaves" class="px-4 py-2 rounded-xl text-xs font-bold bg-amber-100 text-amber-900">Clear Leaves Only</button>
+                <button type="button" data-action="execute-reset" data-mode="all" class="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 text-white">Reset Everything</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- Firebase v10.12.2 Modular SDK & Application Logic -->
+    <!-- ========================================================= -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyA731dlhUgqoMGG7J_GUBn_H7vxvEPchms",
+            authDomain: "leave-2027.firebaseapp.com",
+            databaseURL: "https://leave-2027-default-rtdb.firebaseio.com",
+            projectId: "leave-2027",
+            storageBucket: "leave-2027.firebasestorage.app",
+            messagingSenderId: "704005666346",
+            appId: "1:704005666346:web:02ccdf6182c834ad85b553",
+            measurementId: "G-K3KGCM517L"
+        };
+
+        // IMPORTANT: Change DB_PATH for Company B (e.g., "leave_planner_2027_company_b") to keep data 100% isolated
+        const DB_PATH = "leave_planner_2027";
+        const LOCAL_CACHE_KEY = `cache_${DB_PATH}_v5`;
+
+        const YEAR = 2027;
+        const MAX_BALANCE = 22;
+        const MAX_PERIODS = 2;
+        const MIN_CONSECUTIVE_DAYS = 10;
+        const MAX_OVERLAP = 2;
+        const WEEKEND_DAYS = [5, 6]; // 5 = Friday, 6 = Saturday
+        const DEFAULT_ADMIN_PIN = "1234";
+
+        const MONTHS_EN = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ];
+        const MONTHS_SHORT_EN = [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+        ];
+        const DAYS_SHORT_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+        function createDefaultEmployees(count) {
+            const list = [];
+            for (let i = 1; i <= count; i++) {
+                list.push({
+                    id: i,
+                    name: `Employee ${i}`,
+                    pin: null,
+                    locked: false,
+                    exemptDates: {} // { "YYYY-MM-DD": true }
+                });
+            }
+            return list;
+        }
+
+        const state = {
+            currentMonth: 0,
+            isAdmin: false,
+            unlockedEmpId: null,
+            pendingCellAction: null,
+            brushMode: "leave", // 'leave' | 'block'
+            conflictDismissed: false,
+
+            // Synced Firebase data
+            employees: createDefaultEmployees(12),
+            leaves: {},         // { [empId]: { "YYYY-MM-DD": timestampMs } }
+            globalBlocks: {},   // { "YYYY-MM-DD": true }
+            globalLocked: false,
+            adminPin: DEFAULT_ADMIN_PIN,
+
+            // Computed cache
+            dailySummary: {}
+        };
+
+        // Drag state
+        let isDragging = false;
+        let dragEmpId = null;
+        let dragOp = null; // 'add' | 'remove'
+        let dragVisited = new Set();
+
+        // Firebase references
+        let db = null;
+        let plannerRef = null;
+        let isCloudOnline = false;
+        let initialSyncDone = false;
+
+        // =========================================================
+        // Date Formatting Helpers ('YYYY-MM-DD' & Legacy 'm-d')
+        // =========================================================
+        function toIsoDate(m, d) {
+            return `${YEAR}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        }
+
+        function parseAnyDateKey(key) {
+            if (!key) return null;
+            if (key.includes("-") && key.length >= 8) {
+                const parts = key.split("-");
+                return { m: Number(parts[1]) - 1, d: Number(parts[2]) };
+            }
+            const parts = key.split("-");
+            if (parts.length === 2) {
+                return { m: Number(parts[0]), d: Number(parts[1]) };
+            }
+            return null;
+        }
+
+        function normalizeDateMap(rawMap) {
+            const out = {};
+            if (!rawMap || typeof rawMap !== "object") return out;
+            for (const rawKey of Object.keys(rawMap)) {
+                const val = rawMap[rawKey];
+                if (!val) continue;
+                const parsed = parseAnyDateKey(rawKey);
+                if (parsed && parsed.m >= 0 && parsed.m < 12 && parsed.d >= 1 && parsed.d <= 31) {
+                    out[toIsoDate(parsed.m, parsed.d)] = val;
+                }
+            }
+            return out;
+        }
+
+        function daysInMonth(m) {
+            return new Date(YEAR, m + 1, 0).getDate();
+        }
+
+        function dayOfWeek(m, d) {
+            return new Date(YEAR, m, d).getDay();
+        }
+
+        function isWeekend(m, d) {
+            return WEEKEND_DAYS.includes(dayOfWeek(m, d));
+        }
+
+        // =========================================================
+        // Firebase Sync & Local Cache
+        // =========================================================
+        function setCloudBadge(mode) {
+            const badge = document.getElementById("cloudStatusBadge");
+            const dot = document.getElementById("cloudStatusDot");
+            const text = document.getElementById("cloudStatusText");
+            if (!badge || !dot || !text) return;
+
+            if (mode === "connected") {
+                badge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200";
+                dot.className = "w-2 h-2 rounded-full bg-emerald-500";
+                text.textContent = "Cloud Connected • Live Sync";
+            } else {
+                badge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200";
+                dot.className = "w-2 h-2 rounded-full bg-amber-500";
+                text.textContent = "Offline / Local Mode";
+            }
+        }
+
+        function saveToLocalCache() {
+            try {
+                localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({
+                    employees: state.employees,
+                    leaves: state.leaves,
+                    globalBlocks: state.globalBlocks,
+                    globalLocked: state.globalLocked,
+                    adminPin: state.adminPin
+                }));
+            } catch (e) {}
+        }
+
+        function loadFromLocalCache() {
+            try {
+                const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+                if (!raw) return;
+                normalizeAndApplyData(JSON.parse(raw));
+            } catch (e) {}
+        }
+
+        function normalizeAndApplyData(data) {
+            if (!data || typeof data !== "object") return;
+
+            const legacyExemptions = (data.exemptions && typeof data.exemptions === "object") ? data.exemptions : {};
+
+            if (Array.isArray(data.employees) && data.employees.length > 0) {
+                state.employees = data.employees.map((emp, idx) => {
+                    const id = Number(emp.id) || (idx + 1);
+                    const cleanName = (emp.name && String(emp.name).trim()) ? String(emp.name).trim() : `Employee ${id}`;
+                    const validPin = (emp.pin && /^\d{4}$/.test(String(emp.pin))) ? String(emp.pin) : null;
+                    const isLocked = Boolean(emp.locked || emp.isApprovedLocked);
+                    const mergedExempt = {
+                        ...normalizeDateMap(legacyExemptions[String(id)]),
+                        ...normalizeDateMap(emp.exemptDates),
+                        ...normalizeDateMap(emp.exemptBlockedDays)
+                    };
+                    return {
+                        id,
+                        name: cleanName,
+                        pin: validPin,
+                        locked: isLocked,
+                        exemptDates: mergedExempt
+                    };
+                });
+            }
+
+            const rawLeaves = (data.leaves && typeof data.leaves === "object") ? data.leaves : {};
+            const normalizedLeaves = {};
+            for (const empKey of Object.keys(rawLeaves)) {
+                normalizedLeaves[empKey] = normalizeDateMap(rawLeaves[empKey]);
+            }
+
+            if (Array.isArray(data.employees)) {
+                data.employees.forEach((rawEmp, idx) => {
+                    const idKey = String(Number(rawEmp.id) || (idx + 1));
+                    if (rawEmp.days && typeof rawEmp.days === "object") {
+                        if (!normalizedLeaves[idKey]) normalizedLeaves[idKey] = {};
+                        const legacyDays = normalizeDateMap(rawEmp.days);
+                        const legacyTs = normalizeDateMap(rawEmp.timestamps);
+                        for (const iso of Object.keys(legacyDays)) {
+                            if (legacyDays[iso] && !normalizedLeaves[idKey][iso]) {
+                                normalizedLeaves[idKey][iso] = Number(legacyTs[iso]) || Date.now();
+                            }
+                        }
+                    }
+                });
+            }
+
+            const rawBlocks = data.globalBlocks || data.blockedDates || data.globalBlockedDays || {};
+            state.leaves = normalizedLeaves;
+            state.globalBlocks = normalizeDateMap(rawBlocks);
+            state.globalLocked = Boolean(data.globalLocked || data.isLocked);
+            state.adminPin = (data.adminPin || data.adminPassword || data.adminPinHash || DEFAULT_ADMIN_PIN);
+        }
+
+        function syncToFirebase() {
+            saveToLocalCache();
+            if (!plannerRef) return;
+
+            const payload = {
+                employees: state.employees.map(emp => ({
+                    id: emp.id,
+                    name: emp.name,
+                    pin: emp.pin || null,
+                    locked: Boolean(emp.locked),
+                    exemptDates: emp.exemptDates || {}
+                })),
+                leaves: state.leaves || {},
+                globalBlocks: state.globalBlocks || {},
+                globalLocked: Boolean(state.globalLocked),
+                adminPin: state.adminPin || DEFAULT_ADMIN_PIN,
+                updatedAt: Date.now()
+            };
+
+            set(plannerRef, payload).catch(err => {
+                console.error("Firebase write failed:", err);
+                setCloudBadge("offline");
+                showToast("Could not sync to cloud. Check internet connection.", "error");
+            });
+        }
+
+        function initFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getDatabase(app);
+                plannerRef = ref(db, DB_PATH);
+                const connectedRef = ref(db, ".info/connected");
+
+                onValue(connectedRef, (snap) => {
+                    isCloudOnline = Boolean(snap.val());
+                    setCloudBadge(isCloudOnline ? "connected" : "offline");
+                });
+
+                onValue(plannerRef, (snapshot) => {
+                    const val = snapshot.val();
+                    if (val) {
+                        normalizeAndApplyData(val);
+                        saveToLocalCache();
+                        renderPreservingScroll();
+                    } else if (!initialSyncDone) {
+                        syncToFirebase();
+                    }
+                    initialSyncDone = true;
+                }, (error) => {
+                    console.error("Firebase read error:", error);
+                    setCloudBadge("offline");
+                });
+            } catch (err) {
+                console.error("Firebase init failed:", err);
+                setCloudBadge("offline");
+            }
+        }
+
+        // =========================================================
+        // Leave Rules, Periods & Validation Helpers
+        // =========================================================
+        function isEmpBooked(empId, m, d) {
+            const empLeaves = state.leaves[String(empId)];
+            return Boolean(empLeaves && empLeaves[toIsoDate(m, d)]);
+        }
+
+        function isBlockedForEmp(emp, m, d) {
+            const iso = toIsoDate(m, d);
+            if (!state.globalBlocks[iso]) return false;
+            if (emp.exemptDates && emp.exemptDates[iso]) return false;
+            return true;
+        }
+
+        function getEmpAnnualUsed(empId) {
+            const empLeaves = state.leaves[String(empId)] || {};
+            let count = 0;
+            for (const iso of Object.keys(empLeaves)) {
+                if (empLeaves[iso]) {
+                    const parsed = parseAnyDateKey(iso);
+                    if (parsed && !isWeekend(parsed.m, parsed.d)) count++;
+                }
+            }
+            return count;
+        }
+
+        function getEmpMonthUsed(empId, m) {
+            const empLeaves = state.leaves[String(empId)] || {};
+            const totalD = daysInMonth(m);
+            let count = 0;
+            for (let d = 1; d <= totalD; d++) {
+                if (!isWeekend(m, d) && empLeaves[toIsoDate(m, d)]) count++;
+            }
+            return count;
+        }
+
+        // Analyzes consecutive working-day leave periods across 2027 (bridging Fri/Sat weekends)
+        function analyzeEmployeePeriods(empId) {
+            const empLeaves = state.leaves[String(empId)] || {};
+            const periods = [];
+            let currentLen = 0;
+
+            for (let m = 0; m < 12; m++) {
+                const totalD = daysInMonth(m);
+                for (let d = 1; d <= totalD; d++) {
+                    if (isWeekend(m, d)) continue;
+                    if (empLeaves[toIsoDate(m, d)]) {
+                        currentLen++;
+                    } else if (currentLen > 0) {
+                        periods.push(currentLen);
+                        currentLen = 0;
+                    }
+                }
+            }
+            if (currentLen > 0) periods.push(currentLen);
+            return periods;
+        }
+
+        function computeDailySummary() {
+            const summary = {};
+            for (let m = 0; m < 12; m++) {
+                const totalD = daysInMonth(m);
+                for (let d = 1; d <= totalD; d++) {
+                    const iso = toIsoDate(m, d);
+                    if (isWeekend(m, d)) {
+                        summary[iso] = { count: 0, bookings: [] };
+                        continue;
+                    }
+                    const bookings = [];
+                    for (const emp of state.employees) {
+                        const empLeaves = state.leaves[String(emp.id)];
+                        if (empLeaves && empLeaves[iso]) {
+                            bookings.push({
+                                empId: emp.id,
+                                name: emp.name,
+                                ts: Number(empLeaves[iso]) || Number.MAX_SAFE_INTEGER
+                            });
+                        }
+                    }
+                    bookings.sort((a, b) => a.ts !== b.ts ? a.ts - b.ts : a.empId - b.empId);
+                    summary[iso] = { count: bookings.length, bookings };
+                }
+            }
+            state.dailySummary = summary;
+        }
+
+        function formatTimestamp(ms) {
+            if (!ms || ms === Number.MAX_SAFE_INTEGER) return "Recorded";
+            try {
+                return new Date(Number(ms)).toLocaleString("en-US", {
+                    month: "short", day: "numeric",
+                    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true
+                });
+            } catch (e) {
+                return "Recorded";
+            }
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+
+        // =========================================================
+        // Cell Booking & Admin Override Logic
+        // =========================================================
+        function toggleEmployeeCell(emp, m, d, forcedOp) {
+            if (state.globalLocked || emp.locked) {
+                openLockedAlertModal(emp);
+                return false;
+            }
+            if (isWeekend(m, d)) return false;
+
+            const iso = toIsoDate(m, d);
+            if (isBlockedForEmp(emp, m, d)) {
+                showToast(`Cannot book ${MONTHS_EN[m]} ${d}: Global Block Period is active.`, "error");
+                return false;
+            }
+
+            const empKey = String(emp.id);
+            if (!state.leaves[empKey]) state.leaves[empKey] = {};
+            const booked = Boolean(state.leaves[empKey][iso]);
+            const op = forcedOp || (booked ? "remove" : "add");
+
+            if (op === "remove") {
+                if (!booked) return false;
+                delete state.leaves[empKey][iso];
+                return true;
+            }
+
+            if (booked) return false;
+            if (getEmpAnnualUsed(emp.id) >= MAX_BALANCE) {
+                showToast(`${emp.name} has reached the ${MAX_BALANCE}-day annual leave quota.`, "error");
+                return false;
+            }
+
+            state.leaves[empKey][iso] = Date.now();
+            state.conflictDismissed = false;
+
+            // Advisory period rules check (Max 2 periods, min 10 consecutive working days each)
+            const periods = analyzeEmployeePeriods(emp.id);
+            if (periods.length > MAX_PERIODS) {
+                showToast(`Policy Notice: ${emp.name} now has ${periods.length} separate periods (Max ${MAX_PERIODS} periods/year).`, "warning");
+            } else if (!isDragging && periods.some(len => len < MIN_CONSECUTIVE_DAYS)) {
+                showToast(`Policy Reminder: Each leave period must be at least ${MIN_CONSECUTIVE_DAYS} consecutive working days.`, "info");
+            }
+
+            return true;
+        }
+
+        function toggleAdminCell(emp, m, d, forcedOp) {
+            if (isWeekend(m, d)) return false;
+            const iso = toIsoDate(m, d);
+            const empKey = String(emp.id);
+
+            if (state.brushMode === "block") {
+                const blocked = isBlockedForEmp(emp, m, d);
+                const op = forcedOp || (blocked ? "remove" : "add");
+                if (op === "add") {
+                    state.globalBlocks[iso] = true;
+                    state.employees.forEach(item => {
+                        if (item.exemptDates && item.exemptDates[iso]) {
+                            delete item.exemptDates[iso];
+                        }
+                    });
+                } else if (state.globalBlocks[iso]) {
+                    if (!emp.exemptDates) emp.exemptDates = {};
+                    emp.exemptDates[iso] = true;
+                }
+                return true;
+            }
+
+            // Admin Grant/Edit Leave Override:
+            // Automatically exempts global block on that date so it renders cleanly with a blue checkmark (✓)
+            if (!state.leaves[empKey]) state.leaves[empKey] = {};
+            const booked = Boolean(state.leaves[empKey][iso]);
+            const op = forcedOp || (booked ? "remove" : "add");
+
+            if (op === "add" && !booked) {
+                if (state.globalBlocks[iso]) {
+                    if (!emp.exemptDates) emp.exemptDates = {};
+                    emp.exemptDates[iso] = true;
+                }
+                state.leaves[empKey][iso] = Date.now();
+                state.conflictDismissed = false;
+                return true;
+            } else if (op === "remove" && booked) {
+                delete state.leaves[empKey][iso];
+                return true;
+            }
+            return false;
+        }
+
+        // =========================================================
+        // Rendering Engine (Preserving Scroll Position)
+        // =========================================================
+        function renderPreservingScroll() {
+            const tableWrap = document.getElementById("scheduleTableWrapper");
+            const tabsWrap = document.getElementById("monthTabsContainer");
+            const savedTableLeft = tableWrap ? tableWrap.scrollLeft : 0;
+            const savedTabsLeft = tabsWrap ? tabsWrap.scrollLeft : 0;
+
+            renderAll();
+
+            const newTableWrap = document.getElementById("scheduleTableWrapper");
+            const newTabsWrap = document.getElementById("monthTabsContainer");
+            if (newTableWrap) newTableWrap.scrollLeft = savedTableLeft;
+            if (newTabsWrap) newTabsWrap.scrollLeft = savedTabsLeft;
+        }
+
+        function renderAll() {
+            computeDailySummary();
+            updateTopBarUI();
+            renderMonthTabs();
+            renderConflictBanner();
+            renderCalendarTable();
+            renderPriorityPanel();
+        }
+
+        function updateTopBarUI() {
+            const adminControls = document.getElementById("adminHeaderControls");
+            const brushBar = document.getElementById("adminBrushToolbar");
+            const priorityPanel = document.getElementById("priorityPanelSection");
+            const toggleBtn = document.getElementById("adminToggleBtn");
+            const toggleText = document.getElementById("adminToggleBtnText");
+
+            if (state.isAdmin) {
+                adminControls.classList.remove("hidden");
+                adminControls.classList.add("flex");
+                brushBar.classList.remove("hidden");
+                if (priorityPanel) priorityPanel.classList.remove("hidden");
+                toggleText.textContent = "Exit Admin";
+                toggleBtn.className = "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition";
+                updateBrushButtons();
+            } else {
+                adminControls.classList.add("hidden");
+                adminControls.classList.remove("flex");
+                brushBar.classList.add("hidden");
+                if (priorityPanel) priorityPanel.classList.add("hidden");
+                toggleText.textContent = "Admin Login";
+                toggleBtn.className = "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white shadow-xs transition";
+            }
+
+            // Unlocked Employee Session Badge (only when unlocked in employee view)
+            const empBadge = document.getElementById("empSessionBadge");
+            const empLabel = document.getElementById("empSessionLabel");
+            if (!state.isAdmin && state.unlockedEmpId !== null) {
+                const activeEmp = state.employees.find(e => e.id === state.unlockedEmpId);
+                if (activeEmp && !activeEmp.locked && !state.globalLocked) {
+                    empBadge.classList.remove("hidden");
+                    empBadge.classList.add("inline-flex");
+                    empLabel.textContent = `Unlocked: ${activeEmp.name}`;
+                } else {
+                    state.unlockedEmpId = null;
+                    empBadge.classList.add("hidden");
+                    empBadge.classList.remove("inline-flex");
+                }
+            } else {
+                empBadge.classList.add("hidden");
+                empBadge.classList.remove("inline-flex");
+            }
+
+            const lockAllBtn = document.getElementById("lockAllBtn");
+            if (lockAllBtn) {
+                lockAllBtn.textContent = state.globalLocked ? "Unlock All" : "Lock All";
+            }
+        }
+
+        function updateBrushButtons() {
+            const leaveBtn = document.getElementById("brushBtn_leave");
+            const blockBtn = document.getElementById("brushBtn_block");
+            if (!leaveBtn || !blockBtn) return;
+
+            if (state.brushMode === "leave") {
+                leaveBtn.className = "inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition bg-sky-600 text-white border-sky-600 shadow-xs";
+                blockBtn.className = "inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition bg-white text-rose-800 border-rose-200 hover:bg-rose-50";
+            } else {
+                leaveBtn.className = "inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition bg-white text-slate-700 border-slate-200 hover:bg-slate-50";
+                blockBtn.className = "inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition bg-rose-600 text-white border-rose-600 shadow-xs";
+            }
+        }
+
+        function renderMonthTabs() {
+            const container = document.getElementById("monthTabsContainer");
+            if (!container) return;
+
+            container.innerHTML = MONTHS_SHORT_EN.map((shortName, mIdx) => {
+                const isActive = mIdx === state.currentMonth;
+                let bookedEmployeesCount = 0;
+                for (const emp of state.employees) {
+                    if (getEmpMonthUsed(emp.id, mIdx) > 0) bookedEmployeesCount++;
+                }
+                const cls = isActive
+                    ? "bg-sky-600 text-white border-sky-600 shadow-xs"
+                    : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200";
+                const badge = bookedEmployeesCount > 0
+                    ? `<span class="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${isActive ? "bg-white/25 text-white" : "bg-sky-100 text-sky-700"}">${bookedEmployeesCount}</span>`
+                    : "";
+
+                return `
+                    <button type="button" data-action="select-month" data-month="${mIdx}"
+                        class="px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${cls}">
+                        <span>${shortName}</span>
+                        ${badge}
+                    </button>
+                `;
+            }).join("");
+        }
+
+        function renderConflictBanner() {
+            const banner = document.getElementById("conflictBanner");
+            const textEl = document.getElementById("conflictBannerText");
+            if (!banner || !textEl) return;
+
+            if (state.conflictDismissed) {
+                banner.classList.add("hidden");
+                return;
+            }
+
+            const m = state.currentMonth;
+            const totalD = daysInMonth(m);
+            const conflicts = [];
+
+            for (let d = 1; d <= totalD; d++) {
+                if (isWeekend(m, d)) continue;
+                const stat = state.dailySummary[toIsoDate(m, d)];
+                if (stat && stat.count > MAX_OVERLAP) {
+                    const firstTwo = stat.bookings.slice(0, 2).map(b => escapeHtml(b.name)).join(" & ");
+                    const overflow = stat.bookings.slice(2).map(b => escapeHtml(b.name)).join(", ");
+                    conflicts.push(`${MONTHS_SHORT_EN[m]} ${d} (${stat.count}/2): ${overflow} conflicts with ${firstTwo}`);
+                }
+            }
+
+            if (conflicts.length === 0) {
+                banner.classList.add("hidden");
+            } else {
+                textEl.textContent = conflicts.join(" • ");
+                banner.classList.remove("hidden");
+            }
+        }
+
+        function renderCalendarTable() {
+            const wrapper = document.getElementById("scheduleTableWrapper");
+            if (!wrapper) return;
+
+            const m = state.currentMonth;
+            const totalDays = daysInMonth(m);
+
+            let html = `<table class="w-full border-collapse text-center table-fixed min-w-[1220px]">`;
+            html += `<thead><tr class="border-b border-slate-200 bg-slate-50">`;
+            html += `
+                <th class="sticky-emp-col px-3 py-3 text-left bg-slate-50 border-r border-slate-200">
+                    <div class="flex items-center justify-between gap-1">
+                        <span class="text-xs font-extrabold text-slate-800">Employee</span>
+                        <div class="flex items-center gap-1">
+                            <span class="text-[10px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200">${MONTHS_SHORT_EN[m]}</span>
+                            <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">Rem.</span>
+                        </div>
+                    </div>
+                </th>
+            `;
+
+            for (let d = 1; d <= totalDays; d++) {
+                const dName = DAYS_SHORT_EN[dayOfWeek(m, d)];
+                const weekend = isWeekend(m, d);
+                const iso = toIsoDate(m, d);
+                const isGloballyBlocked = Boolean(state.globalBlocks[iso]);
+                const stat = state.dailySummary[iso] || { count: 0, bookings: [] };
+
+                let thCls = "bg-slate-50 text-slate-700";
+                let capBadge = `<div class="mt-1 text-[9px] font-bold text-slate-300">0/2</div>`;
+
+                if (weekend) {
+                    thCls = "bg-slate-200/75 text-slate-500";
+                    capBadge = `<div class="mt-1 text-[9px] font-bold text-slate-400">Off</div>`;
+                } else if (isGloballyBlocked) {
+                    thCls = "blocked-header-shaded text-rose-900";
+                    capBadge = `<div class="mt-1 text-[9px] font-extrabold text-rose-700">Block</div>`;
+                } else if (stat.count > MAX_OVERLAP) {
+                    thCls = "bg-rose-50 text-rose-900";
+                    capBadge = `<div class="mt-1 px-1 rounded bg-rose-600 text-white text-[9px] font-extrabold inline-block">${stat.count}/2</div>`;
+                } else if (stat.count === MAX_OVERLAP) {
+                    thCls = "bg-emerald-50 text-emerald-900";
+                    capBadge = `<div class="mt-1 px-1 rounded bg-emerald-600 text-white text-[9px] font-extrabold inline-block">2/2</div>`;
+                } else if (stat.count === 1) {
+                    thCls = "bg-emerald-50/50 text-slate-800";
+                    capBadge = `<div class="mt-1 px-1 rounded bg-emerald-100 text-emerald-800 text-[9px] font-extrabold inline-block">1/2</div>`;
+                }
+
+                const headerDataAttrs = (state.isAdmin && !weekend)
+                    ? `data-action="toggle-header-block" data-month="${m}" data-day="${d}"`
+                    : "";
+                const headerCursor = (state.isAdmin && !weekend) ? "cursor-pointer hover:ring-2 hover:ring-inset hover:ring-rose-300" : "";
+
+                html += `
+                    <th ${headerDataAttrs} class="py-2 px-0.5 border-r border-slate-200/80 ${thCls} ${headerCursor}" title="${state.isAdmin && !weekend ? 'Click to toggle Global Block' : ''}">
+                        <div class="text-[10px] font-semibold opacity-75">${dName}</div>
+                        <div class="text-xs font-extrabold mt-0.5">${d}</div>
+                        ${capBadge}
+                    </th>
+                `;
+            }
+            html += `</tr></thead><tbody class="divide-y divide-slate-200">`;
+
+            state.employees.forEach(emp => {
+                const annualUsed = getEmpAnnualUsed(emp.id);
+                const remaining = Math.max(0, MAX_BALANCE - annualUsed);
+                const monthUsed = getEmpMonthUsed(emp.id, m);
+                const isRowLocked = Boolean(state.globalLocked || emp.locked);
+                const isSessionUnlocked = !state.isAdmin && state.unlockedEmpId === emp.id;
+
+                const monthCls = monthUsed > 0
+                    ? "bg-sky-600 text-white border-sky-600"
+                    : "bg-slate-100 text-slate-400 border-slate-200";
+                const remCls = remaining === 0
+                    ? "bg-emerald-100 text-emerald-800 border-emerald-300 font-extrabold"
+                    : "bg-slate-50 text-slate-600 border-slate-200 font-bold";
+
+                // Admin-only row controls (Strictly hidden in Employee mode)
+                let adminRowControls = "";
+                if (state.isAdmin) {
+                    const pinLabel = emp.pin ? `PIN: ${escapeHtml(emp.pin)}` : "No PIN";
+                    const pinBtnCls = emp.pin
+                        ? "bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100"
+                        : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100";
+                    const lockIcon = emp.locked ? "🔒" : "🔓";
+                    const lockBtnCls = emp.locked
+                        ? "bg-amber-100 text-amber-900 border-amber-300"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100";
+
+                    adminRowControls = `
+                        <button type="button" data-action="admin-manage-pin" data-emp-id="${emp.id}"
+                            class="px-1.5 py-0.5 rounded border text-[9px] font-bold transition ${pinBtnCls}" title="Manage Employee 4-Digit PIN">
+                            ${pinLabel}
+                        </button>
+                        <button type="button" data-action="admin-toggle-emp-lock" data-emp-id="${emp.id}"
+                            class="px-1.5 py-0.5 rounded border text-[10px] font-bold transition ${lockBtnCls}" title="${emp.locked ? 'Unlock Employee Schedule' : 'Approve & Lock Employee Schedule'}">
+                            ${lockIcon}
+                        </button>
+                    `;
+                }
+
+                const nameActionAttr = state.isAdmin ? `data-action="admin-edit-emp" data-emp-id="${emp.id}"` : "";
+                const nameCursor = state.isAdmin ? "cursor-pointer hover:text-sky-600" : "cursor-default";
+
+                html += `<tr class="${isSessionUnlocked ? "bg-sky-50/40" : "hover:bg-slate-50/60"} transition-colors">`;
+                html += `
+                    <td class="sticky-emp-col px-2.5 py-2 text-left border-r border-slate-200">
+                        <div class="flex items-center justify-between gap-1">
+                            <div ${nameActionAttr} class="flex items-center gap-1.5 min-w-0 flex-1 ${nameCursor}">
+                                <span class="w-5 h-5 rounded-md bg-sky-600 text-white text-[11px] font-extrabold flex items-center justify-center shrink-0">
+                                    ${emp.id}
+                                </span>
+                                <span class="text-xs font-bold text-slate-900 truncate" title="${escapeHtml(emp.name)}">
+                                    ${escapeHtml(emp.name)}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0">
+                                ${adminRowControls}
+                                <span class="min-w-[30px] px-1 py-0.5 rounded border text-[9px] font-black text-center ${monthCls}" title="Booked in ${MONTHS_EN[m]}">
+                                    ${monthUsed} d
+                                </span>
+                                <span class="px-1.5 py-0.5 rounded border text-[9px] ${remCls}" title="Remaining annual quota">
+                                    ${remaining} left
+                                </span>
+                                ${state.isAdmin && state.employees.length > 1 ? `
+                                    <button type="button" data-action="admin-delete-emp" data-emp-id="${emp.id}" title="Remove Employee"
+                                        class="p-0.5 rounded hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                    </button>
+                                ` : ""}
+                            </div>
+                        </div>
+                    </td>
+                `;
+
+                for (let d = 1; d <= totalDays; d++) {
+                    const weekend = isWeekend(m, d);
+                    const iso = toIsoDate(m, d);
+                    const booked = isEmpBooked(emp.id, m, d);
+                    // When Admin grants leave during a global block, the employee is exempted so block shading is removed
+                    const blocked = !booked && isBlockedForEmp(emp, m, d);
+                    const stat = state.dailySummary[iso] || { count: 0, bookings: [] };
+
+                    let tdCls = "h-11 p-0.5 border-r border-slate-100 relative transition-colors ";
+                    let cellContent = "";
+
+                    if (weekend) {
+                        tdCls += "bg-slate-200/60 cursor-not-allowed";
+                    } else if (blocked) {
+                        tdCls += "blocked-day-shaded " + (state.isAdmin ? "cursor-pointer" : "cursor-not-allowed");
+                    } else {
+                        const interactive = state.isAdmin || !isRowLocked;
+                        tdCls += interactive ? "cursor-pointer hover:bg-sky-50/70" : "cursor-not-allowed";
+
+                        if (booked) {
+                            const rankIdx = stat.bookings.findIndex(b => b.empId === emp.id);
+                            if (rankIdx >= MAX_OVERLAP) {
+                                cellContent = `<div class="w-full h-8 rounded-lg bg-purple-600 text-white ring-2 ring-purple-300 flex items-center justify-center text-xs font-black shadow-xs" title="Priority Overflow (#${rankIdx + 1})">★</div>`;
+                            } else {
+                                cellContent = `<div class="w-full h-8 rounded-lg bg-sky-500 text-white flex items-center justify-center text-[11px] font-extrabold shadow-xs">✓</div>`;
+                            }
+                        }
+                    }
+
+                    html += `
+                        <td data-cell="1" data-emp-id="${emp.id}" data-month="${m}" data-day="${d}" class="${tdCls}">
+                            ${cellContent}
+                        </td>
+                    `;
+                }
+                html += `</tr>`;
+            });
+
+            html += `</tbody></table>`;
+            wrapper.innerHTML = html;
+        }
+
+        function renderPriorityPanel() {
+            const m = state.currentMonth;
+            const monthLabel = document.getElementById("priorityMonthLabel");
+            const countPill = document.getElementById("priorityCountPill");
+            const logGrid = document.getElementById("priorityLogGrid");
+            if (!monthLabel || !countPill || !logGrid) return;
+
+            monthLabel.textContent = `${MONTHS_EN[m]} 2027`;
+            const entries = [];
+
+            state.employees.forEach(emp => {
+                const empLeaves = state.leaves[String(emp.id)] || {};
+                const totalD = daysInMonth(m);
+                const bookedDays = [];
+                let earliestTs = null;
+
+                for (let d = 1; d <= totalD; d++) {
+                    if (isWeekend(m, d)) continue;
+                    const iso = toIsoDate(m, d);
+                    if (empLeaves[iso]) {
+                        bookedDays.push(d);
+                        const ts = Number(empLeaves[iso]);
+                        if (ts && (!earliestTs || ts < earliestTs)) earliestTs = ts;
+                    }
+                }
+
+                if (bookedDays.length > 0) {
+                    const ranges = [];
+                    let start = bookedDays[0], prev = bookedDays[0];
+                    for (let i = 1; i < bookedDays.length; i++) {
+                        if (bookedDays[i] === prev + 1) {
+                            prev = bookedDays[i];
+                        } else {
+                            ranges.push(start === prev ? `${MONTHS_SHORT_EN[m]} ${start}` : `${MONTHS_SHORT_EN[m]} ${start}–${prev}`);
+                            start = bookedDays[i];
+                            prev = bookedDays[i];
+                        }
+                    }
+                    ranges.push(start === prev ? `${MONTHS_SHORT_EN[m]} ${start}` : `${MONTHS_SHORT_EN[m]} ${start}–${prev}`);
+
+                    entries.push({
+                        emp,
+                        count: bookedDays.length,
+                        rangesText: ranges.join(", "),
+                        ts: earliestTs || Number.MAX_SAFE_INTEGER
+                    });
+                }
+            });
+
+            entries.sort((a, b) => a.ts !== b.ts ? a.ts - b.ts : a.emp.id - b.emp.id);
+            countPill.textContent = `${entries.length} Employee${entries.length === 1 ? "" : "s"}`;
+
+            if (entries.length === 0) {
+                logGrid.innerHTML = `<div class="col-span-full py-4 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">No leave bookings recorded in ${MONTHS_EN[m]} yet.</div>`;
+                return;
+            }
+
+            logGrid.innerHTML = entries.map((item, idx) => `
+                <div class="p-3 rounded-xl border ${idx < 2 ? "border-emerald-200 bg-emerald-50/40" : "border-purple-200 bg-purple-50/40"} space-y-1">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2 py-0.5 rounded-md text-[11px] font-extrabold ${idx < 2 ? "bg-emerald-100 text-emerald-900" : "bg-purple-100 text-purple-900"}">
+                            Priority #${idx + 1} ${idx >= 2 ? "★" : ""}
+                        </span>
+                        <span class="text-[11px] font-extrabold text-sky-700">${item.count} d</span>
+                    </div>
+                    <div class="text-xs font-extrabold text-slate-900">${escapeHtml(item.emp.name)}</div>
+                    <div class="text-[11px] text-slate-600">Dates: <strong>${item.rangesText}</strong></div>
+                    <div class="text-[10px] text-slate-500">⏱ Booked at: ${formatTimestamp(item.ts)}</div>
+                </div>
+            `).join("");
+        }
+
+        // =========================================================
+        // Modal Openers & Utilities
+        // =========================================================
+        function openModal(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove("hidden");
+        }
+
+        function closeModal(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.add("hidden");
+        }
+
+        function openLockedAlertModal(emp) {
+            const desc = document.getElementById("lockedAlertDesc");
+            if (desc) {
+                desc.textContent = state.globalLocked
+                    ? "All 2027 leave schedules have been approved and locked by Admin. Contact Admin for any changes."
+                    : `${emp.name}'s 2027 leave schedule has been approved and locked by Admin. Contact Admin for any changes.`;
+            }
+            openModal("lockedAlertModal");
+        }
+
+        function openEmpCreatePinModal(emp) {
+            document.getElementById("createPinEmpId").value = emp.id;
+            document.getElementById("empCreatePinDesc").innerHTML =
+                `Welcome, <strong>${escapeHtml(emp.name)}</strong>! Create a personal 4-digit PIN to protect your leave row from edits by others.`;
+            document.getElementById("createPinInput1").value = "";
+            document.getElementById("createPinInput2").value = "";
+            document.getElementById("empCreatePinError").classList.add("hidden");
+            openModal("empCreatePinModal");
+            setTimeout(() => document.getElementById("createPinInput1").focus(), 50);
+        }
+
+        function openEmpVerifyPinModal(emp) {
+            document.getElementById("verifyPinEmpId").value = emp.id;
+            document.getElementById("empVerifyPinDesc").innerHTML =
+                `Enter your personal 4-digit PIN for <strong>${escapeHtml(emp.name)}</strong> to unlock and edit your leave dates.`;
+            document.getElementById("verifyPinInput").value = "";
+            document.getElementById("empVerifyPinError").classList.add("hidden");
+            openModal("empVerifyPinModal");
+            setTimeout(() => document.getElementById("verifyPinInput").focus(), 50);
+        }
+
+        function openAdminManagePinModal(empId) {
+            const emp = state.employees.find(e => e.id === empId);
+            if (!emp) return;
+            document.getElementById("adminManagePinEmpId").value = emp.id;
+            document.getElementById("adminManagePinEmpLabel").textContent =
+                `${emp.name} — Current Status: ${emp.pin ? `PIN set (${emp.pin})` : "No PIN set yet"}`;
+            document.getElementById("adminManagePinInput").value = emp.pin || "";
+            openModal("adminManagePinModal");
+            setTimeout(() => document.getElementById("adminManagePinInput").focus(), 50);
+        }
+
+        function openEditEmpModal(empId) {
+            const emp = state.employees.find(e => e.id === empId);
+            if (!emp) return;
+            document.getElementById("editEmpId").value = emp.id;
+            document.getElementById("editEmpNameInput").value = emp.name;
+            const delBtn = document.getElementById("deleteEmpModalBtn");
+            if (delBtn) delBtn.style.display = state.employees.length > 1 ? "inline-flex" : "none";
+            openModal("editEmpModal");
+            setTimeout(() => document.getElementById("editEmpNameInput").focus(), 50);
+        }
+
+        function openRangeModal() {
+            const sel = document.getElementById("rangeEmpSelect");
+            let opts = `<option value="all">All Employees (${state.employees.length})</option>`;
+            state.employees.forEach(emp => {
+                opts += `<option value="${emp.id}">${escapeHtml(emp.name)}</option>`;
+            });
+            sel.innerHTML = opts;
+
+            const mStr = String(state.currentMonth + 1).padStart(2, "0");
+            const maxD = String(daysInMonth(state.currentMonth)).padStart(2, "0");
+            document.getElementById("rangeStartDate").value = `2027-${mStr}-01`;
+            document.getElementById("rangeEndDate").value = `2027-${mStr}-${maxD}`;
+            openModal("rangeModal");
+        }
+
+        function showToast(msg, type = "info") {
+            const container = document.getElementById("toastContainer");
+            if (!container) return;
+            const palette = {
+                success: "bg-emerald-800 text-white border-emerald-600",
+                error: "bg-rose-800 text-white border-rose-600",
+                warning: "bg-amber-800 text-white border-amber-600",
+                info: "bg-slate-800 text-white border-slate-600"
+            };
+            const el = document.createElement("div");
+            el.className = `px-4 py-2.5 rounded-xl border shadow-lg text-xs font-semibold pointer-events-auto transition-opacity duration-300 ${palette[type] || palette.info}`;
+            el.textContent = msg;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = "0";
+                setTimeout(() => el.remove(), 300);
+            }, 3800);
+        }
+
+        function exportToCSV() {
+            let csv = "\uFEFFEmployee ID,Employee Name,PIN Status,Approval Status,Days Used,Remaining Balance,Booked Dates (2027)\n";
+            state.employees.forEach(emp => {
+                const used = getEmpAnnualUsed(emp.id);
+                const status = (state.globalLocked || emp.locked) ? "Approved / Locked" : "Open";
+                const pinStat = emp.pin ? "Set" : "Unset";
+                const empLeaves = state.leaves[String(emp.id)] || {};
+                const datesList = Object.keys(empLeaves)
+                    .filter(iso => empLeaves[iso])
+                    .sort()
+                    .map(iso => {
+                        const parsed = parseAnyDateKey(iso);
+                        return parsed ? `${MONTHS_SHORT_EN[parsed.m]} ${parsed.d}` : iso;
+                    })
+                    .join(" | ") || "None";
+
+                csv += `${emp.id},"${emp.name.replace(/"/g, '""')}","${pinStat}","${status}",${used},${MAX_BALANCE - used},"${datesList}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "Annual_Leave_Plan_2027.csv";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("CSV exported successfully.", "success");
+        }
+
+        // =========================================================
+        // Unified Event Delegation
+        // =========================================================
+        document.addEventListener("click", (e) => {
+            const actionEl = e.target.closest("[data-action]");
+            if (!actionEl) return;
+
+            const action = actionEl.dataset.action;
+
+            if (action === "close-modal") {
+                closeModal(actionEl.dataset.modal);
+            } else if (action === "select-month") {
+                state.currentMonth = Number(actionEl.dataset.month);
+                renderAll();
+            } else if (action === "prev-month") {
+                state.currentMonth = (state.currentMonth + 11) % 12;
+                renderAll();
+            } else if (action === "next-month") {
+                state.currentMonth = (state.currentMonth + 1) % 12;
+                renderAll();
+            } else if (action === "dismiss-conflict-banner") {
+                state.conflictDismissed = true;
+                renderConflictBanner();
+            } else if (action === "export-csv" && state.isAdmin) {
+                exportToCSV();
+            } else if (action === "lock-emp-session") {
+                state.unlockedEmpId = null;
+                state.pendingCellAction = null;
+                renderPreservingScroll();
+                showToast("Session locked.", "info");
+            } else if (action === "toggle-admin") {
+                if (state.isAdmin) {
+                    state.isAdmin = false;
+                    renderPreservingScroll();
+                    showToast("Exited Admin mode.", "info");
+                    return;
+                }
+                document.getElementById("adminPassInput").value = "";
+                document.getElementById("adminPassError").classList.add("hidden");
+                openModal("adminPassModal");
+                setTimeout(() => document.getElementById("adminPassInput").focus(), 50);
+            } else if (action === "open-change-admin-pass" && state.isAdmin) {
+                document.getElementById("newAdminPassInput").value = "";
+                openModal("changeAdminPassModal");
+            } else if (action === "set-brush" && state.isAdmin) {
+                state.brushMode = actionEl.dataset.brush;
+                updateBrushButtons();
+            } else if (action === "toggle-header-block" && state.isAdmin) {
+                const m = Number(actionEl.dataset.month);
+                const d = Number(actionEl.dataset.day);
+                const iso = toIsoDate(m, d);
+                if (state.globalBlocks[iso]) {
+                    delete state.globalBlocks[iso];
+                    state.employees.forEach(emp => {
+                        if (emp.exemptDates && emp.exemptDates[iso]) delete emp.exemptDates[iso];
+                    });
+                    showToast(`Removed Global Block on ${MONTHS_SHORT_EN[m]} ${d}.`, "info");
+                } else {
+                    state.globalBlocks[iso] = true;
+                    state.employees.forEach(emp => {
+                        if (emp.exemptDates && emp.exemptDates[iso]) delete emp.exemptDates[iso];
+                    });
+                    showToast(`Set Global Block on ${MONTHS_SHORT_EN[m]} ${d}.`, "warning");
+                }
+                renderPreservingScroll();
+                syncToFirebase();
+            } else if (action === "add-employee" && state.isAdmin) {
+                const newId = state.employees.length + 1;
+                state.employees.push({
+                    id: newId,
+                    name: `Employee ${newId}`,
+                    pin: null,
+                    locked: false,
+                    exemptDates: {}
+                });
+                renderPreservingScroll();
+                syncToFirebase();
+                showToast(`Added Employee ${newId}.`, "success");
+            } else if (action === "admin-edit-emp" && state.isAdmin) {
+                openEditEmpModal(Number(actionEl.dataset.empId));
+            } else if (action === "admin-delete-emp" && state.isAdmin) {
+                deleteEmployeeById(Number(actionEl.dataset.empId));
+            } else if (action === "delete-emp-from-modal" && state.isAdmin) {
+                const delId = Number(document.getElementById("editEmpId").value);
+                closeModal("editEmpModal");
+                deleteEmployeeById(delId);
+            } else if (action === "admin-manage-pin" && state.isAdmin) {
+                openAdminManagePinModal(Number(actionEl.dataset.empId));
+            } else if (action === "reset-emp-pin-unset" && state.isAdmin) {
+                const empId = Number(document.getElementById("adminManagePinEmpId").value);
+                const emp = state.employees.find(item => item.id === empId);
+                if (emp) {
+                    emp.pin = null;
+                    if (state.unlockedEmpId === emp.id) state.unlockedEmpId = null;
+                    closeModal("adminManagePinModal");
+                    renderPreservingScroll();
+                    syncToFirebase();
+                    showToast(`Reset PIN for ${emp.name}. They will create a new PIN on next click.`, "info");
+                }
+            } else if (action === "admin-toggle-emp-lock" && state.isAdmin) {
+                const empId = Number(actionEl.dataset.empId);
+                const emp = state.employees.find(item => item.id === empId);
+                if (emp) {
+                    emp.locked = !emp.locked;
+                    if (emp.locked && state.unlockedEmpId === emp.id) state.unlockedEmpId = null;
+                    renderPreservingScroll();
+                    syncToFirebase();
+                    showToast(emp.locked ? `🔒 Locked ${emp.name}'s schedule.` : `🔓 Unlocked ${emp.name}'s schedule.`, "info");
+                }
+            } else if (action === "toggle-global-lock" && state.isAdmin) {
+                state.globalLocked = !state.globalLocked;
+                if (state.globalLocked) state.unlockedEmpId = null;
+                renderPreservingScroll();
+                syncToFirebase();
+                showToast(state.globalLocked ? "🔒 Locked all employee schedules." : "🔓 Unlocked all employee schedules.", "info");
+            } else if (action === "open-range-modal" && state.isAdmin) {
+                openRangeModal();
+            } else if (action === "open-reset-modal" && state.isAdmin) {
+                openModal("resetModal");
+            } else if (action === "execute-reset" && state.isAdmin) {
+                const mode = actionEl.dataset.mode;
+                if (mode === "all") {
+                    state.globalBlocks = {};
+                    state.leaves = {};
+                    state.globalLocked = false;
+                    state.employees = createDefaultEmployees(state.employees.length);
+                } else {
+                    state.leaves = {};
+                }
+                closeModal("resetModal");
+                renderPreservingScroll();
+                syncToFirebase();
+                showToast("Schedule reset and synced to cloud.", "success");
+            }
+        });
+
+        function deleteEmployeeById(delId) {
+            if (state.employees.length <= 1) return;
+            const newEmployees = [];
+            const newLeaves = {};
+
+            state.employees
+                .filter(e => e.id !== delId)
+                .forEach((emp, idx) => {
+                    const newId = idx + 1;
+                    const oldKey = String(emp.id);
+                    const newKey = String(newId);
+                    if (state.leaves[oldKey]) newLeaves[newKey] = state.leaves[oldKey];
+                    newEmployees.push({
+                        ...emp,
+                        id: newId,
+                        name: emp.name === `Employee ${emp.id}` ? `Employee ${newId}` : emp.name
+                    });
+                });
+
+            state.employees = newEmployees;
+            state.leaves = newLeaves;
+            renderPreservingScroll();
+            syncToFirebase();
+            showToast("Employee row removed.", "info");
+        }
+
+        // Calendar Grid Mouse Down & Drag Selection
+        const tableWrapper = document.getElementById("scheduleTableWrapper");
+        if (tableWrapper) {
+            tableWrapper.addEventListener("mousedown", (e) => {
+                if (e.button !== 0) return;
+                const cell = e.target.closest("[data-cell]");
+                if (!cell) return;
+
+                const empId = Number(cell.dataset.empId);
+                const m = Number(cell.dataset.month);
+                const d = Number(cell.dataset.day);
+                if (isWeekend(m, d)) return;
+
+                const emp = state.employees.find(item => item.id === empId);
+                if (!emp) return;
+
+                // Admin mode has direct access
+                if (state.isAdmin) {
+                    const iso = toIsoDate(m, d);
+                    const isActive = state.brushMode === "block"
+                        ? isBlockedForEmp(emp, m, d)
+                        : isEmpBooked(emp.id, m, d);
+
+                    isDragging = true;
+                    dragEmpId = emp.id;
+                    dragOp = isActive ? "remove" : "add";
+                    dragVisited = new Set([iso]);
+
+                    if (toggleAdminCell(emp, m, d, dragOp)) {
+                        renderPreservingScroll();
+                        syncToFirebase();
+                    }
+                    return;
+                }
+
+                // Employee mode: Check Approval Lock first
+                if (state.globalLocked || emp.locked) {
+                    openLockedAlertModal(emp);
+                    return;
+                }
+
+                // Employee mode: Require self-service PIN creation or verification
+                if (state.unlockedEmpId !== emp.id) {
+                    state.pendingCellAction = { empId: emp.id, m, d };
+                    if (!emp.pin) {
+                        openEmpCreatePinModal(emp);
+                    } else {
+                        openEmpVerifyPinModal(emp);
+                    }
+                    return;
+                }
+
+                // Employee is unlocked in current session -> toggle / start drag
+                const iso = toIsoDate(m, d);
+                const booked = isEmpBooked(emp.id, m, d);
+                isDragging = true;
+                dragEmpId = emp.id;
+                dragOp = booked ? "remove" : "add";
+                dragVisited = new Set([iso]);
+
+                if (toggleEmployeeCell(emp, m, d, dragOp)) {
+                    renderPreservingScroll();
+                    syncToFirebase();
+                }
+            });
+
+            tableWrapper.addEventListener("mouseover", (e) => {
+                if (!isDragging || dragEmpId === null) return;
+                const cell = e.target.closest("[data-cell]");
+                if (!cell) return;
+
+                const empId = Number(cell.dataset.empId);
+                if (empId !== dragEmpId) return;
+
+                const m = Number(cell.dataset.month);
+                const d = Number(cell.dataset.day);
+                if (isWeekend(m, d)) return;
+
+                const iso = toIsoDate(m, d);
+                if (dragVisited.has(iso)) return;
+                dragVisited.add(iso);
+
+                const emp = state.employees.find(item => item.id === empId);
+                if (!emp) return;
+
+                if (state.isAdmin) {
+                    if (toggleAdminCell(emp, m, d, dragOp)) {
+                        renderPreservingScroll();
+                        syncToFirebase();
+                    }
+                } else if (state.unlockedEmpId === emp.id && !state.globalLocked && !emp.locked) {
+                    if (toggleEmployeeCell(emp, m, d, dragOp)) {
+                        renderPreservingScroll();
+                        syncToFirebase();
+                    }
+                }
+            });
+        }
+
+        window.addEventListener("mouseup", () => {
+            if (isDragging) {
+                isDragging = false;
+                dragEmpId = null;
+                dragVisited.clear();
+            }
+        });
+
+        // =========================================================
+        // Form Submissions
+        // =========================================================
+        document.getElementById("adminPassForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const val = document.getElementById("adminPassInput").value.trim();
+            const errEl = document.getElementById("adminPassError");
+            if (val === String(state.adminPin)) {
+                state.isAdmin = true;
+                state.unlockedEmpId = null;
+                closeModal("adminPassModal");
+                renderPreservingScroll();
+                showToast("Logged in as Admin.", "success");
+            } else {
+                errEl.textContent = "Incorrect Admin PIN.";
+                errEl.classList.remove("hidden");
+            }
+        });
+
+        document.getElementById("changeAdminPassForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const val = document.getElementById("newAdminPassInput").value.trim();
+            if (val.length < 4) return;
+            state.adminPin = val;
+            closeModal("changeAdminPassModal");
+            syncToFirebase();
+            showToast("Admin PIN updated and saved to cloud.", "success");
+        });
+
+        // Self-Service First-Time Employee PIN Creation
+        document.getElementById("empCreatePinForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const empId = Number(document.getElementById("createPinEmpId").value);
+            const p1 = document.getElementById("createPinInput1").value.trim();
+            const p2 = document.getElementById("createPinInput2").value.trim();
+            const errEl = document.getElementById("empCreatePinError");
+
+            if (!/^\d{4}$/.test(p1)) {
+                errEl.textContent = "PIN must be exactly 4 numeric digits (0-9).";
+                errEl.classList.remove("hidden");
+                return;
+            }
+            if (p1 !== p2) {
+                errEl.textContent = "PINs do not match. Please re-enter both fields.";
+                errEl.classList.remove("hidden");
+                return;
+            }
+
+            const emp = state.employees.find(item => item.id === empId);
+            if (!emp) return;
+
+            emp.pin = p1;
+            state.unlockedEmpId = emp.id;
+            closeModal("empCreatePinModal");
+
+            if (state.pendingCellAction && state.pendingCellAction.empId === emp.id) {
+                const { m, d } = state.pendingCellAction;
+                state.pendingCellAction = null;
+                toggleEmployeeCell(emp, m, d);
+            }
+
+            renderPreservingScroll();
+            syncToFirebase();
+            showToast(`Personal PIN created & row unlocked for ${emp.name}.`, "success");
+        });
+
+        // Subsequent Employee PIN Verification
+        document.getElementById("empVerifyPinForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const empId = Number(document.getElementById("verifyPinEmpId").value);
+            const entered = document.getElementById("verifyPinInput").value.trim();
+            const errEl = document.getElementById("empVerifyPinError");
+            const emp = state.employees.find(item => item.id === empId);
+            if (!emp) return;
+
+            if (entered === String(emp.pin)) {
+                state.unlockedEmpId = emp.id;
+                closeModal("empVerifyPinModal");
+
+                if (state.pendingCellAction && state.pendingCellAction.empId === emp.id) {
+                    const { m, d } = state.pendingCellAction;
+                    state.pendingCellAction = null;
+                    toggleEmployeeCell(emp, m, d);
+                    syncToFirebase();
+                }
+
+                renderPreservingScroll();
+                showToast(`Unlocked ${emp.name}. Click "Lock Session" when finished.`, "success");
+            } else {
+                errEl.textContent = "Incorrect 4-digit PIN. Contact Admin to reset if forgotten.";
+                errEl.classList.remove("hidden");
+                document.getElementById("verifyPinInput").value = "";
+                document.getElementById("verifyPinInput").focus();
+            }
+        });
+
+        // Admin Manage Employee PIN Form
+        document.getElementById("adminManagePinForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            if (!state.isAdmin) return;
+            const empId = Number(document.getElementById("adminManagePinEmpId").value);
+            const newPin = document.getElementById("adminManagePinInput").value.trim();
+            if (!/^\d{4}$/.test(newPin)) {
+                showToast("Enter a valid 4-digit numeric PIN.", "error");
+                return;
+            }
+            const emp = state.employees.find(item => item.id === empId);
+            if (emp) {
+                emp.pin = newPin;
+                closeModal("adminManagePinModal");
+                renderPreservingScroll();
+                syncToFirebase();
+                showToast(`Set PIN for ${emp.name} to ${newPin}.`, "success");
+            }
+        });
+
+        // Admin Edit Employee Name Form
+        document.getElementById("editEmpForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            if (!state.isAdmin) return;
+            const empId = Number(document.getElementById("editEmpId").value);
+            const newName = document.getElementById("editEmpNameInput").value.trim();
+            const emp = state.employees.find(item => item.id === empId);
+            if (emp && newName) {
+                emp.name = newName;
+                closeModal("editEmpModal");
+                renderPreservingScroll();
+                syncToFirebase();
+                showToast("Employee name updated.", "success");
+            }
+        });
+
+        // Global Block / Range Form
+        document.getElementById("rangeForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            if (!state.isAdmin) return;
+            const actionType = document.querySelector('input[name="rangeActionType"]:checked').value;
+            const target = document.getElementById("rangeEmpSelect").value;
+            const sStr = document.getElementById("rangeStartDate").value;
+            const eStr = document.getElementById("rangeEndDate").value;
+            if (!sStr || !eStr) return;
+
+            const sDate = new Date(sStr + "T00:00:00");
+            const eDate = new Date(eStr + "T00:00:00");
+            if (eDate < sDate) {
+                showToast("End date must be on or after start date.", "error");
+                return;
+            }
+
+            const targets = target === "all"
+                ? state.employees
+                : state.employees.filter(emp => emp.id === Number(target));
+
+            const cur = new Date(sDate);
+            while (cur <= eDate) {
+                if (cur.getFullYear() === YEAR) {
+                    const m = cur.getMonth();
+                    const d = cur.getDate();
+                    if (!isWeekend(m, d)) {
+                        const iso = toIsoDate(m, d);
+                        if (actionType === "set_block") {
+                            state.globalBlocks[iso] = true;
+                            targets.forEach(emp => {
+                                if (emp.exemptDates && emp.exemptDates[iso]) delete emp.exemptDates[iso];
+                            });
+                        } else if (actionType === "exempt_block") {
+                            if (target === "all") {
+                                delete state.globalBlocks[iso];
+                                state.employees.forEach(emp => {
+                                    if (emp.exemptDates && emp.exemptDates[iso]) delete emp.exemptDates[iso];
+                                });
+                            } else {
+                                targets.forEach(emp => {
+                                    if (!emp.exemptDates) emp.exemptDates = {};
+                                    emp.exemptDates[iso] = true;
+                                });
+                            }
+                        } else if (actionType === "grant_leave") {
+                            targets.forEach(emp => {
+                                const empKey = String(emp.id);
+                                if (state.globalBlocks[iso]) {
+                                    if (!emp.exemptDates) emp.exemptDates = {};
+                                    emp.exemptDates[iso] = true;
+                                }
+                                if (!state.leaves[empKey]) state.leaves[empKey] = {};
+                                if (!state.leaves[empKey][iso]) {
+                                    state.leaves[empKey][iso] = Date.now();
+                                }
+                            });
+                        } else if (actionType === "clear_leave") {
+                            targets.forEach(emp => {
+                                const empKey = String(emp.id);
+                                if (state.leaves[empKey]) delete state.leaves[empKey][iso];
+                            });
+                        }
+                    }
+                }
+                cur.setDate(cur.getDate() + 1);
+            }
+
+            closeModal("rangeModal");
+            renderPreservingScroll();
+            syncToFirebase();
+            showToast("Range action applied and synced.", "success");
+        });
+
+        // Boot Application
+        loadFromLocalCache();
+        renderAll();
+        initFirebase();
+    </script>
+</body>
+</html>
